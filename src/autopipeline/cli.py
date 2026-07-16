@@ -1,277 +1,175 @@
-"""AutoPipeline CLI — Context-Aware Data Pipeline Generator."""
+"""AutoPipeline CLI — 5 commands for pipeline generation and metadata operations."""
 
 import os
-import re
-
 import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.syntax import Syntax
 
-from autopipeline.context import short_name, extract_platform_from_urn
-
-from dotenv import load_dotenv
+from autopipeline.config import DATAHUB_SERVER, DATAHUB_TOKEN, OPENROUTER_API_KEY, OUTPUT_DIR
+from autopipeline.connector import DataHubConnector
+from autopipeline.context import short_name, extract_platform, clean_owner, clean_tag, clean_term
+from autopipeline.composer import compose_pipeline_prompt, compose_schema_prompt
+from autopipeline.generator import PipelineGenerator
 
 console = Console()
-_connector_cache = {}
-
-load_dotenv()
-
-def get_connector():
-    """Get or create a DataHubConnector from env vars."""
-    key = ("DATAHUB_SERVER", "DATAHUB_TOKEN")
-    if key not in _connector_cache:
-        server = os.environ.get("DATAHUB_SERVER") or os.environ.get("DATAHUB_GMS_URL")
-        token = os.environ.get("DATAHUB_TOKEN")
-        if not server or not token:
-            console.print("[red]Error:[/red] Set DATAHUB_SERVER and DATAHUB_TOKEN")
-            console.print("  export DATAHUB_SERVER=http://172.17.0.1:8080")
-            console.print("  export DATAHUB_TOKEN=your-token")
-            raise click.Abort()
-        from autopipeline.connector import DataHubConnector
-        _connector_cache[key] = DataHubConnector(server, token)
-    return _connector_cache[key]
 
 
-def _clean_owner(raw: str) -> str:
-    """Extract a clean owner name from an OwnerClass string."""
-    m = re.search(r"(?:corpuser|corpGroup):([\w.@-]+)", raw)
-    if m:
-        name = m.group(1).strip()
-        name = name[7:] if name.startswith('b2fd91.') else name
-        return name
-    return raw.split(":")[-1].rstrip("})\"'")
-
-
-def _clean_tag(raw: str) -> str:
-    """Extract a clean tag name from a TagAssociationClass string."""
-    m = re.search(r"tag:([^'\")\]}]+)", raw)
-    if m:
-        return m.group(1).strip()
-    return raw.split(":")[-1].rstrip("})\"'")
-
-
-def _clean_term(raw: str) -> str:
-    """Extract a clean glossary term name."""
-    m = re.search(r"glossaryTerm:([^'\")\]}]+)", raw)
-    if m:
-        return m.group(1).strip()
-    return raw.split(":")[-1].rstrip("})\"'")
+def _get_connector():
+    if not DATAHUB_SERVER or not DATAHUB_TOKEN:
+        console.print("[red]Set DATAHUB_SERVER and DATAHUB_TOKEN in .env[/red]")
+        raise click.Abort()
+    return DataHubConnector(DATAHUB_SERVER, DATAHUB_TOKEN)
 
 
 @click.group()
 def main():
     """AutoPipeline: Context-Aware Data Pipeline Generator."""
-    pass
 
 
 @main.command()
 def verify():
-    """Verify connectivity to DataHub."""
-    conn = get_connector()
-    healthy = conn.verify()
-    server = os.environ.get("DATAHUB_SERVER") or os.environ.get("DATAHUB_GMS_URL", "?")
-    if healthy:
-        console.print(Panel.fit(
-            "[green]\u2713 DataHub connection OK[/green]\n"
-            f"  Server: {server}"
-        ))
+    """Test DataHub connectivity."""
+    conn = _get_connector()
+    if conn.verify():
+        console.print(Panel.fit(f"[green]Connected[/green]\n  Server: {DATAHUB_SERVER}"))
     else:
-        console.print(f"[red]\u2717 DataHub connection failed[/red] (server: {server})")
+        console.print(f"[red]Connection failed[/red] (server: {DATAHUB_SERVER})")
 
 
 @main.command()
-@click.option("--query", "-q", required=True, help="Search term for datasets")
-def search(query: str):
+@click.option("--query", "-q", required=True)
+def search(query):
     """Search datasets in DataHub."""
-    conn = get_connector()
+    conn = _get_connector()
     datasets = conn.collector.resolve_dataset(query)
     if not datasets:
         console.print("[yellow]No datasets found[/yellow]")
         return
-
     table = Table(title=f"Datasets matching '{query}'")
-    table.add_column("Name", style="cyan")
-    table.add_column("Platform", style="green")
-    table.add_column("Fields", justify="right")
-    table.add_column("Upstreams", justify="right")
-    table.add_column("Downstreams", justify="right")
-    table.add_column("URN", style="dim")
-
+    for col in ["Name", "Platform", "Fields", "Upstreams", "Downstreams"]:
+        table.add_column(col, justify="right" if col in ["Fields", "Upstreams", "Downstreams"] else "left",
+                         style="cyan" if col == "Name" else "green" if col == "Platform" else None)
     for ds in datasets:
-        plat = short_name(ds.platform) if ds.platform else extract_platform_from_urn(ds.urn)
-        urn_short = ds.urn[:60] + "..." if len(ds.urn) > 60 else ds.urn
-        table.add_row(ds.name, plat, str(len(ds.schema_fields)),
-                       str(len(ds.upstreams)), str(len(ds.downstreams)), urn_short)
+        table.add_row(ds.name, short_name(ds.platform) if ds.platform else extract_platform(ds.urn),
+                      str(len(ds.schema_fields)), str(len(ds.upstreams)), str(len(ds.downstreams)))
     console.print(table)
-    console.print(f"[dim]Total: {len(datasets)} datasets[/dim]")
+    console.print(f"[dim]{len(datasets)} datasets found[/dim]")
 
 
 @main.command()
 @click.argument("urn")
-def inspect(urn: str):
-    """Show full metadata context for a dataset URN."""
-    conn = get_connector()
+def inspect(urn):
+    """Full metadata context for a dataset."""
+    conn = _get_connector()
     ds = conn.collector.get_dataset_context(urn, hops=2)
     if not ds:
-        console.print(f"[red]Could not fetch dataset: {urn}[/red]")
+        console.print(f"[red]Could not fetch: {urn}[/red]")
         return
-
     console.print(f"\n[bold cyan]{ds.name}[/bold cyan]")
-    console.print(f"  [dim]URN:[/dim] {ds.urn}")
+    console.print(f"  URN: {ds.urn}")
     if ds.platform:
-        console.print(f"  [dim]Platform:[/dim] {short_name(ds.platform)}")
+        console.print(f"  Platform: {short_name(ds.platform)}")
     if ds.description:
-        desc = ds.description[:300].replace("\n", " ")
-        console.print(f"\n  [dim]Description:[/dim] {desc}...")
-
+        console.print(f"  Description: {ds.description[:300]}...")
     if ds.owners:
-        cleaned = [_clean_owner(o) for o in ds.owners]
-        console.print(f"\n  [yellow]Owners:[/yellow] {', '.join(cleaned)}")
+        console.print(f"  Owners: {', '.join(clean_owner(o) for o in ds.owners)}")
     if ds.tags:
-        cleaned = [_clean_tag(t) for t in ds.tags]
-        console.print(f"  [yellow]Tags:[/yellow] {', '.join(cleaned)}")
+        console.print(f"  Tags: {', '.join(clean_tag(t) for t in ds.tags)}")
     if ds.glossary_terms:
-        cleaned = [_clean_term(t) for t in ds.glossary_terms]
-        console.print(f"  [yellow]Glossary Terms:[/yellow] {', '.join(cleaned)}")
-
+        console.print(f"  Terms: {', '.join(clean_term(t) for t in ds.glossary_terms)}")
     if ds.schema_fields:
-        schema_table = Table(title=f"Schema ({len(ds.schema_fields)} fields)")
-        schema_table.add_column("Field", style="cyan")
-        schema_table.add_column("Type", style="green")
-        schema_table.add_column("Description")
+        st = Table(title=f"Schema ({len(ds.schema_fields)} fields)")
+        st.add_column("Field", style="cyan")
+        st.add_column("Type", style="green")
+        st.add_column("Description")
         for f in ds.schema_fields:
-            desc = (f.description or "")[:60]
-            schema_table.add_row(f.field_path, f.native_type, desc)
-        console.print(schema_table)
-
+            st.add_row(f.field_path, f.native_type, (f.description or "")[:60])
+        console.print(st)
     if ds.upstreams:
-        console.print(f"\n[bold]Upstream Sources ({len(ds.upstreams)}):[/bold]")
+        console.print(f"\n[bold]Upstreams ({len(ds.upstreams)}):[/bold]")
         for u in ds.upstreams[:15]:
-            console.print(f"  \u2022 {short_name(u)}")
+            console.print(f"  {short_name(u)}")
     if ds.downstreams:
-        console.print(f"\n[bold]Downstream Consumers ({len(ds.downstreams)}):[/bold]")
+        console.print(f"\n[bold]Downstreams ({len(ds.downstreams)}):[/bold]")
         for d in ds.downstreams[:15]:
-            console.print(f"  \u2022 {short_name(d)}")
+            console.print(f"  {short_name(d)}")
 
 
 @main.command()
-@click.option("--query", "-q", required=True, help="Natural language pipeline request")
-@click.option("--target", "-t", help="DataHub URN of the target dataset (optional)")
-@click.option("--output", "-o", default="output", help="Output directory")
-@click.option("--framework", default="dbt", type=click.Choice(["dbt", "sql", "dag"]))
-@click.option("--dry-run", is_flag=True, help="Print the prompt without calling an LLM")
-def generate(query: str, target: str, output: str, framework: str, dry_run: bool):
-    """Generate a pipeline from a natural language request.
-
-    Uses DataHub metadata context as the foundation for generation.
-    """
-    conn = get_connector()
+@click.option("--query", "-q", required=True)
+@click.option("--target", "-t", help="Dataset URN (auto-resolved if omitted)")
+@click.option("--output", "-o", default=OUTPUT_DIR)
+@click.option("--framework", "-f", default="dbt", type=click.Choice(["dbt", "sql", "dag"]))
+@click.option("--dry-run", is_flag=True)
+def generate(query, target, output, framework, dry_run):
+    """Generate pipeline code from metadata context."""
+    conn = _get_connector()
 
     if not target:
         datasets = conn.collector.resolve_dataset(query)
         if datasets:
             target = datasets[0].urn
-            console.print(f"[dim]Auto-resolved dataset:[/dim] {datasets[0].name}")
+            console.print(f"[dim]Auto-resolved: {datasets[0].name}[/dim]")
 
-    if target:
-        pipeline_ctx = conn.collector.build_pipeline_context(target, hops=2)
-        if not pipeline_ctx:
-            console.print("[red]Failed to build pipeline context[/red]")
-            raise click.Abort()
-    else:
-        console.print("[yellow]No target dataset found[/yellow]")
-        from autopipeline.context import PipelineContext, DatasetContext
-        pipeline_ctx = PipelineContext(
-            target_dataset=DatasetContext(urn="", name="unknown"),
-        )
+    if not target:
+        console.print("[red]No dataset found[/red]")
+        raise click.Abort()
 
-    from autopipeline.context_composer import compose_pipeline_prompt
-    prompt = compose_pipeline_prompt(pipeline_ctx, user_request=query, framework=framework)
+    pipeline_ctx = conn.collector.build_pipeline_context(target, hops=2)
+    if not pipeline_ctx:
+        console.print("[red]Failed to build context[/red]")
+        raise click.Abort()
 
     if dry_run:
-        syntax = Syntax(prompt, "markdown", theme="monokai", word_wrap=True)
-        console.print(Panel(syntax, title=f"[bold]AutoPipeline Prompt ({framework})[/bold]"))
-        console.print(f"\n[dim]Target: {pipeline_ctx.target_dataset.urn}[/dim]")
-        console.print(f"[dim]Context contains: {len(pipeline_ctx.all_datasets)} datasets, "
-                      f"fetched at {pipeline_ctx.fetched_at}[/dim]")
+        prompt = compose_pipeline_prompt(pipeline_ctx, user_request=query, framework=framework)
+        from rich.syntax import Syntax
+        console.print(Panel(Syntax(prompt, "markdown", theme="monokai", word_wrap=True),
+                           title=f"[bold]LLM Prompt ({framework})[/bold]"))
+        console.print(f"\n[dim]{len(pipeline_ctx.all_datasets)} datasets, {len(pipeline_ctx.target_dataset.schema_fields)} columns[/dim]")
         return
 
     model_name = query.lower().replace(" ", "_").replace("/", "_")[:60]
-    import os
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
-    if api_key:
-        # Try LangChain agent first
+    if OPENROUTER_API_KEY:
         from autopipeline.agent import generate_with_agent
         console.print("[dim]Generating with AI agent...[/dim]")
         try:
-            from autopipeline.connector import DataHubConnector
-            _conn = DataHubConnector(
-                server=os.environ.get("DATAHUB_SERVER", ""),
-                token=os.environ.get("DATAHUB_TOKEN", ""),
-            )
-            result = generate_with_agent(
-                request=query,
-                output_dir=output,
-                framework=framework,
-                connector=_conn,
-            )
+            result = generate_with_agent(pipeline_ctx, query, framework, OPENROUTER_API_KEY,
+                                         DATAHUB_SERVER, DATAHUB_TOKEN, output)
             method = result.get("method", "unknown")
-            mname = result.get("model_name", model_name)
-            console.print(f"[bold green]Pipeline generated![/bold green] [dim]({method})[/dim]")
-            console.print(f"[dim]Model:[/dim] {mname}")
+            console.print(f"[bold green]Generated![/bold green] [dim]({method})[/dim]")
             arts = result.get("artifacts", {})
             if arts:
-                console.print("\n[bold]Generated Files:[/bold]")
+                console.print("\n[bold]Files:[/bold]")
                 for name, path in arts.items():
                     if os.path.exists(path):
-                        size = os.path.getsize(path)
-                        console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
-                    else:
-                        console.print(f"  [green]{name}:[/green] {path}")
-            err = result.get("error")
-            if err:
-                console.print(f"[yellow]Agent error: {err}[/yellow]")
+                        console.print(f"  {name}: {path} ({os.path.getsize(path)} bytes)")
         except Exception as e:
-            console.print(f"[yellow]Agent failed ({e}), falling back to template...[/yellow]")
-            from autopipeline.generator import PipelineGenerator
+            console.print(f"[yellow]Agent failed ({e}), using template...[/yellow]")
             gen = PipelineGenerator()
-            artifacts = gen.write_artifacts(pipeline_ctx, model_name, output_dir=output, framework=framework)
-            for name, path in artifacts.items():
-                size = os.path.getsize(path)
-                console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
+            arts = gen.write_artifacts(pipeline_ctx, model_name, output_dir=output, framework=framework)
+            for name, path in arts.items():
+                console.print(f"  {name}: {path} ({os.path.getsize(path)} bytes)")
     else:
-        # Template-based generation (no LLM)
-        console.print("[dim]No OPENROUTER_API_KEY — using template generation[/dim]")
-        from autopipeline.generator import PipelineGenerator
+        console.print("[dim]No LLM key — using template generation[/dim]")
         gen = PipelineGenerator()
-        artifacts = gen.write_artifacts(pipeline_ctx, model_name, output_dir=output, framework=framework)
-        console.print("[bold green]Pipeline generated![/bold green]")
-        console.print(f"[dim]Model:[/dim] {model_name}")
-        console.print(f"[dim]Framework:[/dim] {framework}")
-        ctx_count = len(pipeline_ctx.all_datasets)
-        col_count = len(pipeline_ctx.target_dataset.schema_fields)
-        console.print(f"[dim]Context:[/dim] {ctx_count} datasets, {col_count} columns")
-        console.print("\n[bold]Generated Files:[/bold]")
-        for name, path in artifacts.items():
-            size = os.path.getsize(path)
-            console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
-
+        arts = gen.write_artifacts(pipeline_ctx, model_name, output_dir=output, framework=framework)
+        console.print(f"[bold green]Generated![/bold green]")
+        console.print(f"  Model: {model_name} | Framework: {framework}")
+        console.print(f"  Context: {len(pipeline_ctx.all_datasets)} datasets, {len(pipeline_ctx.target_dataset.schema_fields)} columns")
+        for name, path in arts.items():
+            console.print(f"  {name}: {path} ({os.path.getsize(path)} bytes)")
 
 
 @main.command()
-@click.option("--urn", help="Dataset URN to tag")
-@click.option("--tag", default="urn:li:tag:AutoPipeline", help="Tag URN to add")
-def tag(urn: str, tag: str):
-    """Add a tag to a dataset (write-back test)."""
-    conn = get_connector()
-    ok = conn.writer.add_tag_to_dataset(urn, tag)
-    if ok:
-        console.print(f"[green]\u2713 Tag '{tag}' added to {urn}[/green]")
-    else:
-        console.print(f"[red]\u2717 Failed to add tag[/red]")
+@click.option("--urn", required=True)
+@click.option("--tag", default="urn:li:tag:AutoPipeline")
+def tag(urn, tag):
+    """Tag a dataset in DataHub (write-back test)."""
+    conn = _get_connector()
+    ok = conn.writer.add_tag(urn, tag)
+    console.print(f"[green]Tag added[/green]" if ok else "[red]Failed[/red]")
 
 
 if __name__ == "__main__":
