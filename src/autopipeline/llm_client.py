@@ -9,19 +9,10 @@ from dataclasses import dataclass
 class LLMConfig:
     """Configuration for the LLM API call."""
     api_key: str
-    model: str = "tencent/hy3:free"
+    model: str = "openrouter/free"
     base_url: str = "https://openrouter.ai/api/v1"
     max_tokens: int = 8000
     temperature: float = 0.3
-
-
-# Free models ranked by coding ability (July 2026)
-FREE_MODELS = {
-    "tencent/hy3:free": "Tencent Hy3 — 295B MoE, best overall free model",
-    "nvidia/nemotron-3-ultra-550b-a55b:free": "NVIDIA Nemotron 3 Ultra — 550B MoE, strong reasoning",
-    "poolside/laguna-m.1:free": "Poolside Laguna — coding-focused, Apache 2.0",
-    "google/gemini-3-flash-lite-preview:free": "Google Gemini 3 Flash — fast, 256K context",
-}
 
 
 def call_llm(
@@ -80,7 +71,7 @@ def call_llm(
 def generate_pipeline_with_llm(
     prompt: str,
     api_key: str,
-    model: str = "tencent/hy3:free",
+    model: str = "openrouter/free",
 ) -> str:
     """High-level helper: send a pipeline generation prompt and return the LLM response."""
     config = LLMConfig(api_key=api_key, model=model)

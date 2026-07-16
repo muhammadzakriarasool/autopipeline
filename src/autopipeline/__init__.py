@@ -17,9 +17,13 @@ __all__ = [
     "DataHubWriter",
     "compose_schema_prompt",
     "compose_pipeline_prompt",
+    "build_agent",
+    "generate_with_agent",
+    "AgentConfig",
 ]
 
 from autopipeline.connector import DataHubConnector
 from autopipeline.context import ContextCollector, DatasetContext, PipelineContext
 from autopipeline.writer import DataHubWriter
 from autopipeline.context_composer import compose_schema_prompt, compose_pipeline_prompt
+from autopipeline.agent import build_agent, generate_with_agent, AgentConfig
