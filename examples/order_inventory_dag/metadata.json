@@ -1,0 +1,7 @@
+{
+  "name": "order_inventory_dag",
+  "framework": "dag",
+  "artifacts": {
+    "dag": "examples/order_inventory_dag/dags/order_inventory_dag.py"
+  }
+}

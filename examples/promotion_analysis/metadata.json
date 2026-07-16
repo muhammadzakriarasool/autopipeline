@@ -1,0 +1,15 @@
+{
+  "name": "promotion_analysis",
+  "framework": "dbt",
+  "target_urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+  "description": "Promotion effectiveness \u2014 tracks marketing campaign ROI with 6 columns",
+  "generated_at": "2026-07-16T14:46:49.712434Z",
+  "total_datasets": 3,
+  "total_columns": 6,
+  "upstream_sources": 1,
+  "downstream_consumers": 1,
+  "artifacts": {
+    "model_sql": "examples/promotion_analysis/models/promotion_analysis.sql",
+    "schema_yml": "examples/promotion_analysis/models/schema.yml"
+  }
+}

@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: {{ model_name }}
+    description: "{{ description | default("AutoPipeline generated model") }}"
+    docs:
+      show: true
+    columns:
+{% for col in target_columns %}
+      - name: {{ col.name }}
+        description: "{{ col.description | default("") }}"
+        data_type: {{ col.type | default("unknown") }}
+{% if col.tags %}        tags: [{{ col.tags | join(", ") }}]{% endif %}
+{% if col.tests %}
+        tests:
+{% for test in col.tests %}
+          - {{ test }}:
+              severity: warn
+{% endfor %}
+{% endif %}
+{% endfor %}

@@ -1,0 +1,41 @@
+/*
+  AutoPipeline Generated SQL Transformation
+  Generated at: {{ generated_at }}
+  Target: {{ target_urn }}
+  Sources: {{ upstream_names | join(", ") }}
+*/
+
+-- {{ description | default("SQL transformation") }}
+
+{% for source in sources %}
+-- Source: {{ source.table }} ({{ source.platform }})
+{% endfor %}
+
+WITH
+
+{% for source in sources %}
+{{ source.alias }} AS (
+    SELECT
+        {% for col in source.columns %}
+        {{ col.name }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    FROM {{ source.database | default("raw") }}.{{ source.schema | default("public") }}.{{ source.table }}
+),
+
+{% endfor %}
+
+transformed AS (
+    SELECT
+        {% for col in target_columns %}
+        {{ col.expression | default(col.name) }} AS {{ col.alias | default(col.name) }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    FROM {{ sources[0].alias }}
+    {% if joins %}
+    {% for join in joins %}
+    {{ join.type | default("LEFT") }} JOIN {{ join.alias }}
+        ON {{ join.condition }}
+    {% endfor %}
+    {% endif %}
+)
+
+SELECT * FROM transformed;

@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: promotion_analysis
+    description: "Contains information about marketing promotions and campaigns"
+    docs:
+      show: true
+    columns:
+      - name: promotion_id
+        description: "Unique identifier for the promotion"
+        data_type: NUMBER
+        tests:
+          - not_null:
+              severity: warn
+      - name: promotion_name
+        description: "Name of the marketing promotion"
+        data_type: TEXT
+      - name: promotion_start_date
+        description: "Starting date of the promotion"
+        data_type: TEXT
+      - name: promotion_end_date
+        description: "Ending date of the promotion"
+        data_type: TEXT
+      - name: promotion_description
+        description: "Detailed description of the promotion"
+        data_type: TEXT
+        tags: [No Sample Values]      - name: promotion_cost
+        description: "Budgeted cost of running the promotion"
+        data_type: FLOAT

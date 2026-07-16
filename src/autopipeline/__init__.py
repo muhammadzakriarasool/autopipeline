@@ -8,7 +8,7 @@ It then writes back to the DataHub graph with tags, documentation,
 and lineage so every generated artifact enriches the catalog.
 """
 
-__version__ = "0.2.0"
+__version__ = "1.0.0"
 __all__ = [
     "DataHubConnector",
     "ContextCollector",

@@ -1,0 +1,14 @@
+{
+  "name": "customer_orders",
+  "framework": "sql",
+  "target_urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.customers,PROD)",
+  "description": "Customer order history \u2014 plain SQL transformation joining customers to orders",
+  "generated_at": "2026-07-16T14:46:50.513808Z",
+  "total_datasets": 3,
+  "total_columns": 22,
+  "upstream_sources": 1,
+  "downstream_consumers": 1,
+  "artifacts": {
+    "sql": "examples/customer_orders/customer_orders.sql"
+  }
+}

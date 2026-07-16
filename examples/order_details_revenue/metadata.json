@@ -1,0 +1,15 @@
+{
+  "name": "order_details_revenue",
+  "framework": "dbt",
+  "target_urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_details,PROD)",
+  "description": "Daily revenue report \u2014 consolidates 55 columns across 11 upstream sources",
+  "generated_at": "2026-07-16T14:46:49.077717Z",
+  "total_datasets": 13,
+  "total_columns": 55,
+  "upstream_sources": 11,
+  "downstream_consumers": 1,
+  "artifacts": {
+    "model_sql": "examples/order_details_revenue/models/order_details_revenue.sql",
+    "schema_yml": "examples/order_details_revenue/models/schema.yml"
+  }
+}

@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
 dist/
 build/
@@ -8,3 +9,5 @@ build/
 output/
 *.log
 .DS_Store
+.pytest_cache/
+.mypy_cache/

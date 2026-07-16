@@ -1,0 +1,40 @@
+"""
+AutoPipeline Generated DAG: {{ model_name }}
+Generated at: {{ generated_at }}
+Target: {{ target_urn }}
+"""
+
+from datetime import datetime, timedelta
+
+from airflow import DAG
+from airflow.providers.snowflake.transfers.copy_into_snowflake import (
+    CopyIntoSnowflakeOperator,
+)
+from airflow.operators.python import PythonOperator
+from airflow.utils.dates import days_ago
+
+default_args = {
+    "owner": "autopipeline",
+    "depends_on_past": False,
+    "email_on_failure": True,
+    "email_on_retry": False,
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
+}
+
+with DAG(
+    dag_id="{{ model_name }}",
+    default_args=default_args,
+    description="{{ description | default("AutoPipeline generated DAG") }}",
+    schedule_interval="{{ schedule | default("@daily") }}",
+    start_date=days_ago(1),
+    catchup=False,
+    tags=[{% if tags %}"{{ tags | join('", "') }}"{% endif %}],
+) as dag:
+
+    transform_task = PythonOperator(
+        task_id="transform_data",
+        python_callable=lambda: print("Transform step - implement SQL logic here"),
+    )
+
+    transform_task

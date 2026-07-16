@@ -1,0 +1,48 @@
+{{ "{{" }} config(
+    materialized='{{ materialization | default("table") }}',
+    description='{{ description | default("AutoPipeline generated model") }}',
+    tags=[{% if tags %}'{{ tags | join("', '") }}'{% endif %}]
+) {{ "}}" }}
+
+/*
+  AutoPipeline Generated: {{ model_name }}
+  Generated at: {{ generated_at }}
+  Target: {{ target_urn }}
+  Sources: {{ upstream_names | join(", ") }}
+*/
+
+WITH
+
+{% for source in sources %}
+{{ source.alias }} AS (
+    SELECT
+        {% for col in source.columns %}
+        {{ col.name }}{% if col.type %}::{{ col.type }}{% endif %} AS {{ col.name }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    FROM {{ "{{" }} source('{{ source.database | default("raw") }}', '{{ source.table }}') {{ "}}" }}
+),
+
+{% endfor %}
+{% if joins %}
+joined AS (
+    SELECT
+        {% for col in target_columns %}
+        {{ col.name }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    FROM {{ sources[0].alias }}
+    {% for join in joins %}
+    {{ join.type | default("LEFT") }} JOIN {{ join.alias }}
+        ON {{ join.condition }}
+    {% endfor %}
+)
+{% endif %}
+
+final AS (
+    SELECT
+        {% for col in target_columns %}
+        {{ col.name }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    FROM {% if joins %}joined{% else %}{{ sources[0].alias }}{% endif %}
+)
+
+SELECT * FROM final

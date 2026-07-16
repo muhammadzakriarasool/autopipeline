@@ -195,8 +195,27 @@ def generate(query: str, target: str, output: str, framework: str, dry_run: bool
                       f"fetched at {pipeline_ctx.fetched_at}[/dim]")
         return
 
-    console.print("[yellow]Pipeline generation (Phase 2-3) not yet implemented.\n"
-                  "Use --dry-run to preview the context prompt.[/yellow]")
+    model_name = query.lower().replace(" ", "_").replace("/", "_")[:60]
+    from autopipeline.generator import PipelineGenerator
+    gen = PipelineGenerator()
+    try:
+        artifacts = gen.write_artifacts(
+            pipeline_ctx, model_name, output_dir=output, framework=framework
+        )
+        console.print(f"[bold green]Pipeline generated![/bold green]")
+        console.print(f"[dim]Model:[/dim] {model_name}")
+        console.print(f"[dim]Framework:[/dim] {framework}")
+        console.print(f"[dim]Context:[/dim] {len(pipeline_ctx.all_datasets)} datasets, "
+                      f"{len(pipeline_ctx.target_dataset.schema_fields)} columns")
+        console.print(f"\n[bold]Generated Files:[/bold]")
+        for name, path in artifacts.items():
+            import os
+            size = os.path.getsize(path)
+            console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
+    except Exception as e:
+        console.print(f"[red]Generation failed: {e}[/red]")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
 
 @main.command()
