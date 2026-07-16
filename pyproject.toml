@@ -1,6 +1,6 @@
 [project]
 name = "autopipeline"
-version = "0.1.0"
+version = "0.2.0"
 description = "Context-Aware Data Pipeline Generator — AI agents that read DataHub metadata to generate production-ready pipeline code and write back to the graph."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
