@@ -201,24 +201,57 @@ def generate(query: str, target: str, output: str, framework: str, dry_run: bool
     model_name = query.lower().replace(" ", "_").replace("/", "_")[:60]
     from autopipeline.generator import PipelineGenerator
     gen = PipelineGenerator()
-    try:
-        artifacts = gen.write_artifacts(
-            pipeline_ctx, model_name, output_dir=output, framework=framework
-        )
-        console.print(f"[bold green]Pipeline generated![/bold green]")
-        console.print(f"[dim]Model:[/dim] {model_name}")
-        console.print(f"[dim]Framework:[/dim] {framework}")
-        console.print(f"[dim]Context:[/dim] {len(pipeline_ctx.all_datasets)} datasets, "
-                      f"{len(pipeline_ctx.target_dataset.schema_fields)} columns")
-        console.print(f"\n[bold]Generated Files:[/bold]")
-        for name, path in artifacts.items():
-            import os
-            size = os.path.getsize(path)
-            console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
-    except Exception as e:
-        console.print(f"[red]Generation failed: {e}[/red]")
-        import traceback
-        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
+    # Check for OpenRouter API key
+    import os
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+
+    if api_key:
+        # Call LLM for smarter code generation
+        from autopipeline.llm_client import generate_pipeline_with_llm, FREE_MODELS
+        console.print("[dim]Using LLM to generate pipeline...[/dim]")
+        try:
+            llm_response = generate_pipeline_with_llm(
+                prompt=compose_pipeline_prompt(pipeline_ctx, user_request=query, framework=framework),
+                api_key=api_key,
+            )
+            console.print(f"[bold green]LLM pipeline generated![/bold green]")
+            # Write the LLM response to the output file
+            out_dir = os.path.join(output, "models")
+            os.makedirs(out_dir, exist_ok=True)
+            llm_file = os.path.join(out_dir, f"{model_name}_llm.sql")
+            with open(llm_file, "w") as f:
+                f.write(llm_response)
+            console.print(f"  [green]LLM output:[/green] {llm_file} ({len(llm_response)} chars)")
+            # Also write template version
+            artifacts = gen.write_artifacts(pipeline_ctx, model_name, output_dir=output, framework=framework)
+            for name, path in artifacts.items():
+                size = os.path.getsize(path)
+                console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
+        except Exception as e:
+            console.print(f"[yellow]LLM call failed ({e}), falling back to template...[/yellow]")
+            artifacts = gen.write_artifacts(pipeline_ctx, model_name, output_dir=output, framework=framework)
+            for name, path in artifacts.items():
+                size = os.path.getsize(path)
+                console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
+    else:
+        # Template-based generation (no LLM needed)
+        console.print("[dim]No OPENROUTER_API_KEY — using template generation[/dim]")
+        try:
+            artifacts = gen.write_artifacts(pipeline_ctx, model_name, output_dir=output, framework=framework)
+            console.print(f"[bold green]Pipeline generated![/bold green]")
+            console.print(f"[dim]Model:[/dim] {model_name}")
+            console.print(f"[dim]Framework:[/dim] {framework}")
+            console.print(f"[dim]Context:[/dim] {len(pipeline_ctx.all_datasets)} datasets, "
+                          f"{len(pipeline_ctx.target_dataset.schema_fields)} columns")
+            console.print(f"\n[bold]Generated Files:[/bold]")
+            for name, path in artifacts.items():
+                size = os.path.getsize(path)
+                console.print(f"  [green]{name}:[/green] {path} ({size} bytes)")
+        except Exception as e:
+            console.print(f"[red]Generation failed: {e}[/red]")
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
 
 @main.command()
