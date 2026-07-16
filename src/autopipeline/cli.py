@@ -11,9 +11,12 @@ from rich.syntax import Syntax
 
 from autopipeline.context import short_name, extract_platform_from_urn
 
+from dotenv import load_dotenv
+
 console = Console()
 _connector_cache = {}
 
+load_dotenv()
 
 def get_connector():
     """Get or create a DataHubConnector from env vars."""
