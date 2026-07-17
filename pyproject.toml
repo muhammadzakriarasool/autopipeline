@@ -1,7 +1,7 @@
 [project]
 name = "autopipeline"
 version = "1.0.0"
-description = "Context-Aware Data Pipeline Generator — reads DataHub metadata to generate production-ready pipeline code and writes back to the graph."
+description = "AutoPilot — Self-Healing Data Pipeline Agent powered by DataHub metadata."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [
@@ -20,6 +20,8 @@ dependencies = [
     "python-dotenv>=1.0",
     "sqlparse>=0.5",
     "sqlglot>=25.0",
+    "pydantic>=2.0",
+    "schedule>=1.2",
 ]
 
 [project.scripts]

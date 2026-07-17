@@ -1,0 +1,36 @@
+autopilot:
+  mode: "shadow"  # shadow | autonomous | disabled
+
+  detection:
+    polling_interval_seconds: 300
+    enabled_checks:
+      - freshness
+      - volume
+      - schema
+    freshness_max_age_hours: 24
+    volume_deviation_threshold_percent: 20
+    null_threshold_percent: 5
+
+  scope:
+    domains: []
+    platforms: ["dbt"]
+    include_urns: []
+    exclude_urns: []
+
+  rca:
+    max_lineage_hops: 3
+    min_confidence_threshold: 0.7
+
+  fixes:
+    auto_apply_types:
+      - "doc_fix"
+      - "assertion_update"
+    require_approval_types:
+      - "dbt_model_patch"
+      - "sql_patch"
+      - "dag_update"
+
+  write_back:
+    tag_prefix: "AutoPilot"
+    create_incident_documents: true
+    update_descriptions: true
