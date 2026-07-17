@@ -1,116 +1,113 @@
-# AutoPipeline
+# AutoPilot — Self-Healing Data Pipeline Agent
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 [![DataHub](https://img.shields.io/badge/DataHub-1.6.0%2B-orange)](https://github.com/datahub-project/datahub)
+[![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen)](tests/)
+[![Hackathon](https://img.shields.io/badge/Hackathon-DataHub%20Agent%20Hackathon-red)](https://datahub.devpost.com/)
 
-AI agents that read DataHub metadata to generate production-ready pipeline code — and write back to the graph.
+> The first open-source self-healing data pipeline agent that uses DataHub metadata
+> to detect quality issues, diagnose root causes via lineage traversal, generate fixes,
+> and document everything back to the graph.
 
-Built for the **Build with DataHub: The Agent Hackathon** — *Metadata-Aware Code Generation & Development* category.
+## Demo
 
----
+[![Demo Video](https://img.shields.io/badge/Watch-Demo%20Video-red?style=for-the-badge&logo=youtube)](https://youtube.com/watch?v=YOUR_VIDEO_ID)
+
+## What It Does
+
+AutoPilot monitors DataHub quality assertions in real-time. When something breaks, it autonomously:
+
+1. **Detects** — Polls assertion results, checks freshness/schema/volume
+2. **Diagnoses** — Traces lineage upstream to find root cause
+3. **Generates Fix** — Produces dbt/SQL patches grounded in real metadata
+4. **Validates** — Re-checks assertion to confirm resolution
+5. **Documents** — Writes incident report, tags, and descriptions back to DataHub
+
+```
+  DETECT → DIAGNOSE → FIX → VALIDATE → DOCUMENT
+  (All state stored in DataHub graph)
+```
+
+## Quick Start
+
+```bash
+# Install
+pip install -e .
+
+# Run tests
+python -m pytest tests/ -v
+
+# Start dashboard
+streamlit run src/autopipeline/ui/app.py
+```
+
+Open `http://localhost:8501` in your browser.
+
+## Dashboard
+
+The Streamlit dashboard provides:
+
+- **Overview** — KPI metrics, health chart, detection timeline
+- **Monitor** — Live issue feed with diagnose/fix actions
+- **History** — Healing cycle log with audit trail
 
 ## Architecture
 
 ```
-User Request
-    |
-    v
-AutoPipeline CLI
-    |
-    +-- ContextCollector --> DataHub (schemas, lineage, ownership, tags)
-    +-- ContextComposer  --> Structured LLM prompt
-    +-- PipelineGenerator --> Jinja2 templates (dbt, SQL, DAGs)
-    +-- LangChain Agent   --> DataHub tools (explore + generate + write-back)
-    +-- DataHubWriter     --> Tags, descriptions, lineage (write-back to graph)
+┌─────────────────────────────────────────────────────┐
+│                 AutoPilot Orchestrator               │
+│                                                      │
+│  ┌─────────┐  ┌──────────┐  ┌──────────┐           │
+│  │ DETECT  │→ │ DIAGNOSE │→ │   FIX    │           │
+│  │detector │  │diagnosis │  │  fixer   │           │
+│  └─────────┘  └──────────┘  └──────────┘           │
+│       │            │              │                   │
+│       ▼            ▼              ▼                   │
+│  ┌─────────┐  ┌──────────┐  ┌──────────┐           │
+│  │VALIDATE │← │ DOCUMENT │← │  APPLY   │           │
+│  │ healer  │  │ healer   │  │ healer   │           │
+│  └─────────┘  └──────────┘  └──────────┘           │
+│                                                      │
+│              DataHub Graph (state)                   │
+└─────────────────────────────────────────────────────┘
 ```
 
----
+## Tech Stack
 
-## Quickstart
-
-```bash
-git clone https://github.com/muhammadzakriarasool/autopipeline.git
-cd autopipeline
-pip install -e .
-```
-
-Configure `.env` with your DataHub connection and OpenRouter key (free tier):
-
-```
-DATAHUB_SERVER=http://172.17.0.1:8080
-DATAHUB_TOKEN=your-token
-OPENROUTER_API_KEY=sk-or-v1-...
-```
-
----
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `autopipeline verify` | Test DataHub connectivity |
-| `autopipeline search -q "query"` | Search datasets in DataHub |
-| `autopipeline inspect <urn>` | Full metadata context for a dataset |
-| `autopipeline generate -q "prompt" [-t urn] [-f dbt] [--dry-run]` | Generate pipeline code |
-| `autopipeline tag --urn <urn>` | Tag a dataset (write-back test) |
-
----
-
-## Generated Artifacts
-
-| Example | Framework | Output |
-|---------|-----------|--------|
-| [order_details_revenue](examples/order_details_revenue/) | dbt | 55-column model + schema.yml |
-| [promotion_analysis](examples/promotion_analysis/) | dbt | 6-column model + schema.yml |
-| [customer_orders](examples/customer_orders/) | SQL | 22-column transform |
-| [order_inventory_dag](examples/order_inventory_dag/) | Airflow | DAG skeleton |
-
----
-
-## Write-Back to DataHub
-
-Every generated artifact enriches the DataHub catalog:
-
-- **Tags** — marks datasets with `AutoPipeline`
-- **Descriptions** — appends generation metadata
-- **Lineage** — records upstream source to generated model
-
----
+| Component | Technology |
+|-----------|-----------|
+| Language | Python 3.11+ |
+| Data Platform | DataHub OSS (Docker) |
+| Agent Framework | LangChain AgentExecutor |
+| LLM | OpenRouter free tier (28+ models) |
+| Dashboard | Streamlit + Plotly |
+| Templates | Jinja2 |
+| CLI | Click |
+| Testing | pytest |
 
 ## Project Structure
 
 ```
 autopipeline/
-  .env                    # Configuration (gitignored)
-  pyproject.toml          # Package config (Apache 2.0)
-  LICENSE                 # Apache 2.0
-  README.md               # This file
-  dev-notes/              # Development history + Idea 3 plan
-  examples/               # Generated pipeline artifacts
-  src/autopipeline/
-    __init__.py
-    cli.py                # CLI (5 commands)
-    config.py             # Environment variables
-    context.py            # Metadata collector + dataclasses
-    composer.py           # LLM prompt assembly
-    writer.py             # DataHub write-back mutations
-    generator.py          # Jinja2 template rendering
-    llm.py                # OpenAI-compatible LLM client
-    agent.py              # LangChain agent with DataHub tools
-    templates/            # Jinja2 pipeline templates
-  tests/                  # Unit tests
+├── src/autopipeline/          # Core modules
+│   ├── detector.py            # Detection engine
+│   ├── diagnosis.py           # RCA engine
+│   ├── fixer.py               # Fix generation
+│   ├── healer.py              # Validation + write-back
+│   ├── autopilot.py           # Orchestrator
+│   └── ui/app.py              # Streamlit dashboard
+├── tests/                     # 107 tests
+├── dev-notes/                 # Design documents
+├── implementation-notes/      # Phase documentation
+├── examples/                  # Generated artifacts
+└── autopilot-config.yaml      # Configuration
 ```
 
----
+## Open Source Contribution
 
-## Tests
-
-```bash
-python3 -m pytest tests/ -v
-```
-
----
+AutoPilot contributes `datahub-self-heal` Skill to the
+[datahub-skills](https://github.com/datahub-project/datahub-skills) registry.
 
 ## License
 
@@ -118,4 +115,4 @@ python3 -m pytest tests/ -v
 
 ---
 
-*Built for the Build with DataHub Agent Hackathon — Deadline Aug 10, 2026*
+*Built for the [Build with DataHub: The Agent Hackathon](https://datahub.devpost.com/) — Deadline Aug 10, 2026*
